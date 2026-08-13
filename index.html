@@ -4,6 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ledger — Guest Post Price Tracker</title>
+<meta name="theme-color" content="#16233A">
+<meta name="description" content="Track and compare guest post prices across agency sheets, offline-capable.">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
@@ -349,9 +354,14 @@
     <p class="hint">Drop in CSV exports from each agency. The tool auto-detects website, price, DA/DR, and TAT columns — rename the agency label if needed.</p>
     <div class="dropzone" id="dropzone">
       <p><span class="accent">Click to upload</span> or drag CSV files here</p>
+      <p style="margin-top:6px; font-size:11px;">If your file picker greys out CSVs, switch it to "All Files"</p>
     </div>
-    <input type="file" id="fileInput" accept=".csv" multiple>
+    <input type="file" id="fileInput" accept=".csv,text/csv,application/vnd.ms-excel,application/csv,text/plain,text/comma-separated-values" multiple>
     <div class="file-list" id="fileList"></div>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px;">
+      <span class="fuzzy-note" id="saveStatus"></span>
+      <button class="copy-btn" id="clearBtn" style="border-color:var(--rust); color:var(--rust);">Clear saved data</button>
+    </div>
   </div>
 
   <button class="run-btn" id="runBtn" disabled>Match sites &amp; build ledger</button>
@@ -384,12 +394,53 @@
 </div>
 
 <script>
-const uploadedFiles = []; // {name, agency, rows: [[..]]}
+const STORAGE_KEY = 'ledger_files_v1';
+const TARGETS_KEY = 'ledger_targets_v1';
+
+let uploadedFiles = []; // {name, agency, rows: [[..]]}
 let matchData = []; // {agency, website, da, dr, traffic, pkr, usd, tat}
 let notFound = [];
 let targets = [];
 
 document.getElementById('ledgerDate').textContent = new Date().toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}).toUpperCase();
+
+function saveToStorage(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(uploadedFiles));
+    const status = document.getElementById('saveStatus');
+    if(status){
+      status.textContent = 'Saved locally · ' + new Date().toLocaleTimeString();
+    }
+  }catch(e){
+    console.warn('Could not save to localStorage', e);
+  }
+}
+
+function saveTargets(){
+  try{
+    localStorage.setItem(TARGETS_KEY, targetInput.value);
+  }catch(e){}
+}
+
+function loadFromStorage(){
+  try{
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if(saved){
+      uploadedFiles = JSON.parse(saved);
+      renderFileList();
+      runBtn.disabled = uploadedFiles.length === 0;
+    }
+    const savedTargets = localStorage.getItem(TARGETS_KEY);
+    if(savedTargets){
+      targetInput.value = savedTargets;
+    }
+    if(uploadedFiles.length){
+      document.getElementById('saveStatus').textContent = `Restored ${uploadedFiles.length} sheet(s) from last visit`;
+    }
+  }catch(e){
+    console.warn('Could not load from localStorage', e);
+  }
+}
 
 const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('fileInput');
@@ -427,6 +478,7 @@ function handleFiles(fileArr){
         });
         renderFileList();
         runBtn.disabled = uploadedFiles.length === 0;
+        saveToStorage();
       }
     });
   });
@@ -446,6 +498,7 @@ function renderFileList(){
   fileListEl.querySelectorAll('.agency-name-input').forEach(inp => {
     inp.addEventListener('input', e => {
       uploadedFiles[e.target.dataset.idx].agency = e.target.value;
+      saveToStorage();
     });
   });
   fileListEl.querySelectorAll('[data-remove]').forEach(btn => {
@@ -453,6 +506,7 @@ function renderFileList(){
       uploadedFiles.splice(parseInt(e.target.dataset.remove), 1);
       renderFileList();
       runBtn.disabled = uploadedFiles.length === 0;
+      saveToStorage();
     });
   });
 }
@@ -635,6 +689,27 @@ function renderResults(){
 }
 
 document.getElementById('runBtn').addEventListener('click', runMatch);
+
+targetInput.addEventListener('input', saveTargets);
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if(!confirm('Clear all saved sheets and targets from this browser?')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(TARGETS_KEY);
+  uploadedFiles = [];
+  targetInput.value = '';
+  renderFileList();
+  runBtn.disabled = true;
+  document.getElementById('saveStatus').textContent = 'Cleared';
+});
+
+loadFromStorage();
+
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(err => console.warn('SW registration failed', err));
+  });
+}
 
 document.querySelectorAll('.tab').forEach(tab => {
   tab.addEventListener('click', () => {
