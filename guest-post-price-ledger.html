@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ledger — Guest Post Price Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#16233A;
+    --ink-soft:#4A5568;
+    --paper:#EDEFEA;
+    --paper-card:#F7F8F4;
+    --line:#CBD1C4;
+    --teal:#2F6D63;
+    --teal-dark:#1F4B44;
+    --amber:#C98A2C;
+    --rust:#A63D40;
+    --rust-soft:#F3E3E1;
+    --teal-soft:#E1EDE9;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 28px 28px;
+    background-position: -1px -1px;
+    color:var(--ink);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+  }
+  .wrap{
+    max-width:980px;
+    margin:0 auto;
+    padding:48px 24px 80px;
+  }
+  header{
+    margin-bottom:36px;
+    border-bottom:2px solid var(--ink);
+    padding-bottom:20px;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-size:clamp(28px, 4vw, 40px);
+    font-weight:600;
+    margin:0;
+    letter-spacing:-0.01em;
+  }
+  .tagline{
+    font-size:13px;
+    color:var(--ink-soft);
+    font-family:'IBM Plex Mono', monospace;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+  }
+  .ledger-no{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    text-align:right;
+  }
+  .panel{
+    background:var(--paper-card);
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:24px;
+    margin-bottom:20px;
+    box-shadow: 3px 3px 0 rgba(22,35,58,0.06);
+  }
+  .panel h2{
+    font-family:'Fraunces', serif;
+    font-size:15px;
+    font-weight:600;
+    margin:0 0 4px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+  .step-num{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:20px;height:20px;
+    background:var(--ink);
+    color:var(--paper);
+    border-radius:50%;
+    font-size:11px;
+    font-family:'IBM Plex Mono', monospace;
+    flex-shrink:0;
+  }
+  .hint{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin:0 0 14px;
+    line-height:1.5;
+  }
+  textarea{
+    width:100%;
+    min-height:110px;
+    resize:vertical;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:12px 14px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    color:var(--ink);
+    line-height:1.6;
+  }
+  textarea:focus, input:focus{
+    outline:2px solid var(--teal);
+    outline-offset:1px;
+  }
+  .dropzone{
+    border:1.5px dashed var(--line);
+    border-radius:2px;
+    padding:22px;
+    text-align:center;
+    background:#fff;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color:var(--teal);
+    background:var(--teal-soft);
+  }
+  .dropzone p{
+    margin:0;
+    font-size:13px;
+    color:var(--ink-soft);
+  }
+  .dropzone .accent{color:var(--teal); font-weight:600;}
+  #fileInput{display:none;}
+  .file-list{
+    margin-top:12px;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .file-chip{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:2px;
+    padding:8px 12px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+  }
+  .file-chip button{
+    background:none;
+    border:none;
+    color:var(--rust);
+    cursor:pointer;
+    font-size:14px;
+    font-weight:600;
+  }
+  .agency-name-input{
+    background:transparent;
+    border:none;
+    border-bottom:1px dashed var(--line);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--ink);
+    width:160px;
+    padding:2px 0;
+  }
+  .run-btn{
+    display:block;
+    width:100%;
+    padding:14px;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:2px;
+    font-family:'Fraunces', serif;
+    font-size:16px;
+    font-weight:600;
+    letter-spacing:0.02em;
+    cursor:pointer;
+    transition:background .15s ease;
+  }
+  .run-btn:hover{background:var(--teal-dark);}
+  .run-btn:disabled{background:#A8ADA0; cursor:not-allowed;}
+  .tabs{
+    display:flex;
+    gap:2px;
+    margin:32px 0 0;
+    border-bottom:2px solid var(--ink);
+  }
+  .tab{
+    padding:10px 18px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    background:transparent;
+    border:none;
+    cursor:pointer;
+    color:var(--ink-soft);
+    position:relative;
+    top:2px;
+  }
+  .tab.active{
+    color:var(--ink);
+    font-weight:600;
+    border-bottom:2px solid var(--teal);
+  }
+  .tab .count{
+    display:inline-block;
+    margin-left:5px;
+    background:var(--line);
+    color:var(--ink);
+    border-radius:8px;
+    padding:1px 6px;
+    font-size:10.5px;
+  }
+  .tabpanel{display:none; padding-top:18px;}
+  .tabpanel.active{display:block;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    background:var(--paper-card);
+  }
+  th{
+    text-align:left;
+    padding:9px 12px;
+    background:var(--ink);
+    color:var(--paper);
+    font-weight:500;
+    text-transform:uppercase;
+    font-size:10.5px;
+    letter-spacing:0.05em;
+  }
+  td{
+    padding:9px 12px;
+    border-bottom:1px solid var(--line);
+  }
+  tr:hover td{background:var(--teal-soft);}
+  .badge-best{
+    display:inline-block;
+    border:1.5px solid var(--amber);
+    color:var(--amber);
+    font-size:9.5px;
+    padding:2px 6px;
+    border-radius:2px;
+    letter-spacing:0.05em;
+    transform:rotate(-2deg);
+    font-weight:600;
+    margin-left:8px;
+  }
+  .not-found-list{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
+    gap:8px;
+  }
+  .nf-item{
+    background:var(--rust-soft);
+    border:1px solid var(--rust);
+    color:var(--rust);
+    padding:8px 12px;
+    border-radius:2px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+  }
+  .empty{
+    padding:40px 20px;
+    text-align:center;
+    color:var(--ink-soft);
+    font-size:13px;
+  }
+  .toolbar{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-top:24px;
+    gap:12px;
+    flex-wrap:wrap;
+  }
+  .export-btn{
+    background:var(--teal);
+    color:#fff;
+    border:none;
+    padding:10px 18px;
+    border-radius:2px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    font-weight:600;
+    cursor:pointer;
+    letter-spacing:0.03em;
+  }
+  .export-btn:hover{background:var(--teal-dark);}
+  .copy-btn{
+    background:transparent;
+    color:var(--teal);
+    border:1px solid var(--teal);
+    padding:9px 16px;
+    border-radius:2px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    cursor:pointer;
+  }
+  .copy-btn:hover{background:var(--teal-soft);}
+  .status{
+    font-size:11.5px;
+    color:var(--ink-soft);
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .fuzzy-note{
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top:4px;
+  }
+  ::selection{background:var(--amber); color:#fff;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Ledger</h1>
+      <div class="tagline">Guest post price tracker</div>
+    </div>
+    <div class="ledger-no" id="ledgerDate"></div>
+  </header>
+
+  <div class="panel">
+    <h2><span class="step-num">1</span>Target sites</h2>
+    <p class="hint">Paste the domains you're sourcing prices for, one per line (with or without https://).</p>
+    <textarea id="targetInput" placeholder="europeanbusinessreview.com&#10;parkmagazineny.com&#10;moranalytics.com"></textarea>
+  </div>
+
+  <div class="panel">
+    <h2><span class="step-num">2</span>Agency price sheets</h2>
+    <p class="hint">Drop in CSV exports from each agency. The tool auto-detects website, price, DA/DR, and TAT columns — rename the agency label if needed.</p>
+    <div class="dropzone" id="dropzone">
+      <p><span class="accent">Click to upload</span> or drag CSV files here</p>
+    </div>
+    <input type="file" id="fileInput" accept=".csv" multiple>
+    <div class="file-list" id="fileList"></div>
+  </div>
+
+  <button class="run-btn" id="runBtn" disabled>Match sites &amp; build ledger</button>
+
+  <div id="resultsArea" style="display:none;">
+    <div class="tabs">
+      <button class="tab active" data-tab="all">All listings <span class="count" id="cntAll">0</span></button>
+      <button class="tab" data-tab="cheap">Cheapest per site <span class="count" id="cntCheap">0</span></button>
+      <button class="tab" data-tab="nf">Not found <span class="count" id="cntNf">0</span></button>
+    </div>
+
+    <div class="tabpanel active" id="panel-all">
+      <div id="allTableWrap"></div>
+    </div>
+    <div class="tabpanel" id="panel-cheap">
+      <div id="cheapTableWrap"></div>
+    </div>
+    <div class="tabpanel" id="panel-nf">
+      <div id="nfListWrap"></div>
+    </div>
+
+    <div class="toolbar">
+      <span class="status" id="statusLine"></span>
+      <div style="display:flex; gap:10px;">
+        <button class="copy-btn" id="copyBtn">Copy cheapest list</button>
+        <button class="export-btn" id="exportBtn">Export .xlsx</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const uploadedFiles = []; // {name, agency, rows: [[..]]}
+let matchData = []; // {agency, website, da, dr, traffic, pkr, usd, tat}
+let notFound = [];
+let targets = [];
+
+document.getElementById('ledgerDate').textContent = new Date().toLocaleDateString('en-GB', {day:'2-digit', month:'short', year:'numeric'}).toUpperCase();
+
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+const fileListEl = document.getElementById('fileList');
+const runBtn = document.getElementById('runBtn');
+const targetInput = document.getElementById('targetInput');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('drag');
+  handleFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', e => handleFiles(e.target.files));
+
+function cleanAgencyName(filename){
+  let n = filename.replace(/\.csv$/i, '');
+  n = n.replace(/[_\-]+/g, ' ');
+  n = n.replace(/\b(agency|sheet|all sites|personal author|author admin sites|quality sites)\b/gi, '');
+  n = n.replace(/\s+/g, ' ').trim();
+  return n || filename;
+}
+
+function handleFiles(fileArr){
+  Array.from(fileArr).forEach(file => {
+    if(!file.name.toLowerCase().endsWith('.csv')) return;
+    Papa.parse(file, {
+      complete: (res) => {
+        uploadedFiles.push({
+          name: file.name,
+          agency: cleanAgencyName(file.name),
+          rows: res.data
+        });
+        renderFileList();
+        runBtn.disabled = uploadedFiles.length === 0;
+      }
+    });
+  });
+}
+
+function renderFileList(){
+  fileListEl.innerHTML = '';
+  uploadedFiles.forEach((f, idx) => {
+    const chip = document.createElement('div');
+    chip.className = 'file-chip';
+    chip.innerHTML = `
+      <input class="agency-name-input" value="${f.agency}" data-idx="${idx}">
+      <button data-remove="${idx}">&times;</button>
+    `;
+    fileListEl.appendChild(chip);
+  });
+  fileListEl.querySelectorAll('.agency-name-input').forEach(inp => {
+    inp.addEventListener('input', e => {
+      uploadedFiles[e.target.dataset.idx].agency = e.target.value;
+    });
+  });
+  fileListEl.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      uploadedFiles.splice(parseInt(e.target.dataset.remove), 1);
+      renderFileList();
+      runBtn.disabled = uploadedFiles.length === 0;
+    });
+  });
+}
+
+function normDomain(s){
+  if(!s) return '';
+  return s.toLowerCase()
+    .replace(/^https?:\/\//, '')
+    .replace(/^www\./, '')
+    .replace(/\/.*$/, '')
+    .trim();
+}
+
+function findHeaderRow(rows){
+  for(let i=0; i<Math.min(rows.length, 15); i++){
+    const joined = rows[i].join(' ').toLowerCase();
+    if(/website|domain/.test(joined) && /price|pkr|usd|da\b|dr\b/.test(joined)){
+      return i;
+    }
+  }
+  return -1;
+}
+
+function mapColumns(header){
+  const map = {website:-1, pkr:-1, usd:-1, da:-1, dr:-1, traffic:-1, tat:-1};
+  header.forEach((h, i) => {
+    const c = (h || '').toLowerCase().trim();
+    if(map.website === -1 && /(website|domain|^site$)/.test(c)) map.website = i;
+    if(map.da === -1 && c === 'da') map.da = i;
+    if(map.dr === -1 && c === 'dr') map.dr = i;
+    if(map.traffic === -1 && /traffic/.test(c)) map.traffic = i;
+    if(map.tat === -1 && /(tat|turnaround|time)/.test(c)) map.tat = i;
+    if(map.usd === -1 && /(usd|\$)/.test(c)) map.usd = i;
+    if(map.pkr === -1 && /(pkr|price|rate|cost)/.test(c) && !/usd|\$/.test(c)) map.pkr = i;
+  });
+  return map;
+}
+
+function extractNumber(cell){
+  if(cell === undefined || cell === null) return null;
+  const s = String(cell).toLowerCase().replace(/,/g, '');
+  const m = s.match(/[\d.]+/);
+  if(!m) return null;
+  let n = parseFloat(m[0]);
+  if(/k\b/.test(s)) n = n * 1000;
+  return isNaN(n) ? null : n;
+}
+
+// simple levenshtein for fuzzy near-matches
+function levenshtein(a, b){
+  const m = a.length, n = b.length;
+  const dp = Array.from({length:m+1}, () => new Array(n+1).fill(0));
+  for(let i=0;i<=m;i++) dp[i][0]=i;
+  for(let j=0;j<=n;j++) dp[0][j]=j;
+  for(let i=1;i<=m;i++){
+    for(let j=1;j<=n;j++){
+      dp[i][j] = a[i-1]===b[j-1] ? dp[i-1][j-1] : 1+Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function runMatch(){
+  targets = targetInput.value.split('\n').map(t => normDomain(t)).filter(Boolean);
+  matchData = [];
+  const allSheetDomains = new Set();
+
+  uploadedFiles.forEach(file => {
+    const rows = file.rows.filter(r => r.some(c => c && c.trim()));
+    const headerIdx = findHeaderRow(rows);
+    let colMap, dataRows;
+    if(headerIdx === -1){
+      colMap = {website:0, pkr:-1, usd:-1, da:-1, dr:-1, traffic:-1, tat:-1};
+      dataRows = rows;
+    } else {
+      colMap = mapColumns(rows[headerIdx]);
+      dataRows = rows.slice(headerIdx+1);
+    }
+
+    dataRows.forEach(row => {
+      // collect any domain-like cell for fuzzy universe
+      row.forEach(cell => {
+        const d = normDomain(cell);
+        if(/^[a-z0-9-]+\.[a-z]{2,}$/.test(d)) allSheetDomains.add(d);
+      });
+
+      const siteCell = colMap.website >= 0 ? row[colMap.website] : row.find(c => /\.[a-z]{2,}/i.test(c||''));
+      const site = normDomain(siteCell);
+      if(!site) return;
+
+      if(targets.includes(site)){
+        matchData.push({
+          agency: file.agency,
+          website: site,
+          da: colMap.da >= 0 ? row[colMap.da] : '',
+          dr: colMap.dr >= 0 ? row[colMap.dr] : '',
+          traffic: colMap.traffic >= 0 ? row[colMap.traffic] : '',
+          pkr: colMap.pkr >= 0 ? extractNumber(row[colMap.pkr]) : null,
+          usd: colMap.usd >= 0 ? extractNumber(row[colMap.usd]) : null,
+          tat: colMap.tat >= 0 ? row[colMap.tat] : ''
+        });
+      }
+    });
+  });
+
+  const foundSites = new Set(matchData.map(m => m.website));
+  notFound = targets.filter(t => !foundSites.has(t)).map(t => {
+    // fuzzy near-match check
+    let closest = null, bestDist = 999;
+    allSheetDomains.forEach(d => {
+      const dist = levenshtein(t, d);
+      if(dist < bestDist){ bestDist = dist; closest = d; }
+    });
+    const threshold = Math.max(2, Math.floor(t.length * 0.2));
+    return { site: t, nearMatch: bestDist <= threshold && bestDist > 0 ? closest : null };
+  });
+
+  renderResults();
+}
+
+function renderResults(){
+  document.getElementById('resultsArea').style.display = 'block';
+
+  // sort all listings by agency then website
+  const sorted = [...matchData].sort((a,b) => a.agency.localeCompare(b.agency) || a.website.localeCompare(b.website));
+
+  document.getElementById('cntAll').textContent = sorted.length;
+  const allWrap = document.getElementById('allTableWrap');
+  if(sorted.length === 0){
+    allWrap.innerHTML = '<div class="empty">No matches yet. Upload sheets and run the match.</div>';
+  } else {
+    allWrap.innerHTML = `<table><thead><tr>
+      <th>Agency</th><th>Website</th><th>DA</th><th>DR</th><th>Traffic</th><th>PKR</th><th>USD</th><th>TAT</th>
+    </tr></thead><tbody>
+      ${sorted.map(m => `<tr>
+        <td>${m.agency}</td><td>${m.website}</td><td>${m.da||''}</td><td>${m.dr||''}</td>
+        <td>${m.traffic||''}</td><td>${m.pkr!==null?m.pkr.toLocaleString():'—'}</td>
+        <td>${m.usd!==null?'$'+m.usd:''}</td><td>${m.tat||''}</td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  }
+
+  // cheapest per site
+  const bySite = {};
+  matchData.forEach(m => {
+    if(m.pkr === null) return;
+    if(!bySite[m.website] || m.pkr < bySite[m.website].pkr){
+      bySite[m.website] = m;
+    }
+  });
+  const cheapList = Object.values(bySite).sort((a,b) => a.website.localeCompare(b.website));
+  document.getElementById('cntCheap').textContent = cheapList.length;
+  const cheapWrap = document.getElementById('cheapTableWrap');
+  if(cheapList.length === 0){
+    cheapWrap.innerHTML = '<div class="empty">No priced matches found.</div>';
+  } else {
+    cheapWrap.innerHTML = `<table><thead><tr>
+      <th>Website</th><th>Cheapest agency</th><th>PKR</th><th>USD</th><th>TAT</th>
+    </tr></thead><tbody>
+      ${cheapList.map(m => `<tr>
+        <td>${m.website}</td><td>${m.agency}<span class="badge-best">BEST RATE</span></td>
+        <td>${m.pkr.toLocaleString()}</td><td>${m.usd!==null?'$'+m.usd:''}</td><td>${m.tat||''}</td>
+      </tr>`).join('')}
+    </tbody></table>`;
+  }
+
+  // not found
+  document.getElementById('cntNf').textContent = notFound.length;
+  const nfWrap = document.getElementById('nfListWrap');
+  if(notFound.length === 0){
+    nfWrap.innerHTML = '<div class="empty">Every target site was found. Nice.</div>';
+  } else {
+    nfWrap.innerHTML = `<div class="not-found-list">
+      ${notFound.map(n => `<div class="nf-item">${n.site}${n.nearMatch ? `<div class="fuzzy-note">possible near-match: ${n.nearMatch}</div>` : ''}</div>`).join('')}
+    </div>`;
+  }
+
+  document.getElementById('statusLine').textContent =
+    `${targets.length} target sites · ${sorted.length} listings · ${cheapList.length} priced sites · ${notFound.length} not found`;
+}
+
+document.getElementById('runBtn').addEventListener('click', runMatch);
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tabpanel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+document.getElementById('copyBtn').addEventListener('click', () => {
+  const bySite = {};
+  matchData.forEach(m => {
+    if(m.pkr === null) return;
+    if(!bySite[m.website] || m.pkr < bySite[m.website].pkr){
+      bySite[m.website] = m;
+    }
+  });
+  const list = Object.values(bySite).sort((a,b) => a.website.localeCompare(b.website))
+    .map(m => `${m.website} - ${m.pkr.toLocaleString()} (${m.agency})`)
+    .join('\n');
+  navigator.clipboard.writeText(list).then(() => {
+    const btn = document.getElementById('copyBtn');
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = original, 1500);
+  });
+});
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const wb = XLSX.utils.book_new();
+
+  const sorted = [...matchData].sort((a,b) => a.agency.localeCompare(b.agency) || a.website.localeCompare(b.website));
+  const allData = [['Agency','Website','DA','DR','Traffic','Price (PKR)','Price (USD)','TAT'],
+    ...sorted.map(m => [m.agency, m.website, m.da, m.dr, m.traffic, m.pkr, m.usd, m.tat])];
+  const ws1 = XLSX.utils.aoa_to_sheet(allData);
+  ws1['!cols'] = [{wch:18},{wch:30},{wch:6},{wch:6},{wch:10},{wch:12},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws1, 'All Listings');
+
+  const bySite = {};
+  matchData.forEach(m => {
+    if(m.pkr === null) return;
+    if(!bySite[m.website] || m.pkr < bySite[m.website].pkr) bySite[m.website] = m;
+  });
+  const cheapList = Object.values(bySite).sort((a,b) => a.website.localeCompare(b.website));
+  const cheapData = [['Website','Cheapest Agency','Price (PKR)','Price (USD)','TAT'],
+    ...cheapList.map(m => [m.website, m.agency, m.pkr, m.usd, m.tat])];
+  const ws2 = XLSX.utils.aoa_to_sheet(cheapData);
+  ws2['!cols'] = [{wch:30},{wch:20},{wch:12},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Cheapest Per Site');
+
+  const nfData = [['Website', 'Possible Near-Match'], ...notFound.map(n => [n.site, n.nearMatch || ''])];
+  const ws3 = XLSX.utils.aoa_to_sheet(nfData);
+  ws3['!cols'] = [{wch:30},{wch:30}];
+  XLSX.utils.book_append_sheet(wb, ws3, 'Not Found');
+
+  XLSX.writeFile(wb, 'Guest_Post_Site_Prices.xlsx');
+});
+</script>
+</body>
+</html>
